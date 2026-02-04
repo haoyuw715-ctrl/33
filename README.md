@@ -19,7 +19,7 @@ The game runs without an API key. If you want smarter AI moves and commentary, o
 
 ## How to Play
 
-- Choose **VS AI Protocol** (CPU opponent) or **Local PvP (Hotseat)**.
+- Choose **VS AI Protocol** (CPU opponent) or **Local PvP (Hotseat)**. A setup modal appears to name both players.
 - End your turn with the large **END TURN** button.
 - You can **Exit** a battle anytime using the top bar button.
 - AI is optional flavor only; the game is fully playable without a key.
@@ -27,6 +27,7 @@ The game runs without an API key. If you want smarter AI moves and commentary, o
 ## Persistence
 
 Basic match stats (matches, wins, AI wins, best win streak) are saved locally in `localStorage` under `neon_duel_stats`.
+Per-player leaderboard entries are stored in `localStorage` under `neon_duel_leaderboard`.
 
 ## Build for GitHub Pages (manual)
 
