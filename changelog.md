@@ -69,6 +69,17 @@ This is not a release log. It’s a learning-focused record of changes made duri
 **What you can learn:**
 - UI bugs often come from **layout constraints**, not just code logic.
 
+## 7) Smarter CPU fallback (no key required)
+**What changed:** The non‑Gemini CPU logic now makes simple, deterministic choices: it avoids healing when undamaged, prefers attack, and defends or heals when low.
+
+**Why this matters:**
+- For a demo, a predictable CPU can feel better than a random or unstable AI.
+- Generative AI is not always the best tool for gameplay decisions.
+
+**What you can learn:**
+- **Rule‑based logic can outperform AI** in clarity and player trust.
+- Use AI only when it clearly improves the experience.
+
 ## Constraints from the course sandbox (not your fault)
 You were working in a limited sandbox, so some “nice to have” improvements were intentionally skipped:
 - No server-side logic or database.
