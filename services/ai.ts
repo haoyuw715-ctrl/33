@@ -4,13 +4,50 @@ import { GameState, Card, AiMoveResponse } from "../types";
 export const getAiAction = async (gameState: GameState, apiKey: string): Promise<AiMoveResponse> => {
   if (!apiKey) {
     console.warn("No API Key provided for AI.");
-    // Fallback dumb AI logic
-    const hand = gameState.players.player2.hand;
-    const affordable = hand.filter(c => c.cost <= gameState.players.player2.energy);
-    if (affordable.length > 0) {
-      return { cardId: affordable[0].id, reasoning: "Fallback random move (No Key)." };
+    // Deterministic CPU fallback logic
+    const p2 = gameState.players.player2;
+    const p1 = gameState.players.player1;
+    const affordable = p2.hand.filter(c => c.cost <= p2.energy);
+    if (affordable.length === 0) {
+      return { cardId: null, reasoning: "No valid moves (No Key)." };
     }
-    return { cardId: null, reasoning: "No valid moves (No Key)." };
+
+    const hpRatio = p2.hp / p2.maxHp;
+    const needHeal = p2.hp < p2.maxHp;
+    const inDanger = hpRatio <= 0.35;
+    const hasShield = p2.shield > 0;
+
+    const attacks = affordable.filter(c => c.type === "ATTACK");
+    const heals = affordable.filter(c => c.type === "HEAL");
+    const defends = affordable.filter(c => c.type === "DEFEND");
+    const specials = affordable.filter(c => c.type === "SPECIAL");
+
+    const pickBestValue = (cards: Card[], key: (c: Card) => number) =>
+      cards.slice().sort((a, b) => key(b) - key(a) || a.cost - b.cost)[0];
+
+    // Priorities: heal if low and damaged, defend if low/no shield, otherwise attack.
+    if (needHeal && (inDanger || (!hasShield && p2.hp < p2.maxHp * 0.7)) && heals.length > 0) {
+      const healCard = pickBestValue(heals, c => c.value);
+      return { cardId: healCard.id, reasoning: "Repairing damage." };
+    }
+
+    if (!hasShield && defends.length > 0 && (inDanger || p1.energy >= p2.energy)) {
+      const defendCard = pickBestValue(defends, c => c.value);
+      return { cardId: defendCard.id, reasoning: "Raising defenses." };
+    }
+
+    if (attacks.length > 0) {
+      const attackCard = pickBestValue(attacks, c => c.value);
+      return { cardId: attackCard.id, reasoning: "Aggressive strike." };
+    }
+
+    if (specials.length > 0) {
+      const specialCard = pickBestValue(specials, c => c.cost === 0 ? 1 : 0);
+      return { cardId: specialCard.id, reasoning: "Tactical setup." };
+    }
+
+    const fallback = affordable[0];
+    return { cardId: fallback.id, reasoning: "Fallback move (No Key)." };
   }
 
   try {
