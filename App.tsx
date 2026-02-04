@@ -67,7 +67,17 @@ export default function App() {
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState('');
-  const [pendingGameStart, setPendingGameStart] = useState<boolean | null>(null);
+  const [stats, setStats] = useState(() => {
+    const stored = localStorage.getItem('neon_duel_stats');
+    if (!stored) {
+      return { totalMatches: 0, totalWins: 0, aiWins: 0, pvpWins: 0, bestWinStreak: 0, currentWinStreak: 0 };
+    }
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return { totalMatches: 0, totalWins: 0, aiWins: 0, pvpWins: 0, bestWinStreak: 0, currentWinStreak: 0 };
+    }
+  });
 
   // Used to prevent strict mode double-firing effects
   const processingAiRef = useRef(false); 
@@ -97,6 +107,23 @@ export default function App() {
     if (state.players.player1.hp <= 0) return 'player2';
     if (state.players.player2.hp <= 0) return 'player1';
     return null;
+  }, []);
+
+  const recordMatchResult = useCallback((winnerId: 'player1' | 'player2' | null, vsAi: boolean) => {
+    setStats((prevStats: { totalMatches: number; totalWins: number; aiWins: number; pvpWins: number; bestWinStreak: number; currentWinStreak: number }) => {
+      const didWin = winnerId === 'player1';
+      const next = {
+        totalMatches: prevStats.totalMatches + 1,
+        totalWins: prevStats.totalWins + (didWin ? 1 : 0),
+        aiWins: prevStats.aiWins + (didWin && vsAi ? 1 : 0),
+        pvpWins: prevStats.pvpWins + (didWin && !vsAi ? 1 : 0),
+        currentWinStreak: didWin ? prevStats.currentWinStreak + 1 : 0,
+        bestWinStreak: prevStats.bestWinStreak,
+      };
+      next.bestWinStreak = Math.max(next.bestWinStreak, next.currentWinStreak);
+      localStorage.setItem('neon_duel_stats', JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   const playCard = useCallback((playerId: 'player1' | 'player2', card: Card) => {
@@ -227,6 +254,7 @@ export default function App() {
         nextState.winner = winner;
         nextState.phase = 'GAME_OVER';
         nextState.logs.push({ id: 'win', message: `${winner === 'player1' ? nextState.players.player1.name : nextState.players.player2.name} WINS!`, type: 'info', timestamp: Date.now() });
+        recordMatchResult(winner as 'player1' | 'player2', nextState.players.player2.isAi);
       } else {
          // Trigger AI commentary occasionally
          if (Math.random() > 0.5) {
@@ -236,7 +264,7 @@ export default function App() {
 
       return nextState;
     });
-  }, [checkGameOver, triggerAiCommentary]);
+  }, [checkGameOver, triggerAiCommentary, recordMatchResult]);
 
   const endTurn = useCallback(() => {
     setGameState(prev => {
@@ -327,13 +355,7 @@ export default function App() {
   // --- UI Handlers ---
 
   const handleStartGameClick = (vsAi: boolean) => {
-    if (vsAi && !apiKey) {
-      setPendingGameStart(vsAi);
-      setTempKey('');
-      setShowKeyModal(true);
-    } else {
-      initializeGame(vsAi);
-    }
+    initializeGame(vsAi);
   };
 
   const initializeGame = (vsAi: boolean) => {
@@ -342,16 +364,16 @@ export default function App() {
     setGameState(newState);
   };
 
+  const exitToMenu = useCallback(() => {
+    setGameState(createInitialState(gameState.players.player2.isAi));
+  }, [gameState.players.player2.isAi]);
+
   const handleSaveKey = () => {
     if (tempKey.trim().length > 0) {
       const key = tempKey.trim();
       setApiKey(key);
       localStorage.setItem('gemini_api_key', key);
       setShowKeyModal(false);
-      if (pendingGameStart !== null) {
-        initializeGame(pendingGameStart);
-        setPendingGameStart(null);
-      }
     }
   };
 
@@ -398,13 +420,13 @@ export default function App() {
           <div className="glass-panel p-6 rounded-2xl max-w-md w-full border border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.2)]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-display font-bold text-cyan-400 flex items-center gap-2">
-                <Key size={20} /> Enter Gemini API Key
+                <Key size={20} /> Optional Gemini API Key
               </h3>
               <button onClick={() => setShowKeyModal(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <p className="text-sm text-slate-300 mb-4">
-              To play against the AI, you need a Google Gemini API Key. Your key is stored locally in your browser.
-            </p>
+              <p className="text-sm text-slate-300 mb-4">
+                AI works without a key using local CPU logic. Add a Gemini key for smarter moves and commentary. Your key is stored locally in your browser.
+              </p>
             <input 
               type="password" 
               value={tempKey}
@@ -479,6 +501,25 @@ export default function App() {
                       </button>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4 text-xs text-slate-400 font-mono">
+                      <div className="glass-panel rounded-lg p-3 border border-slate-700/60">
+                          <div className="text-slate-500">Matches</div>
+                          <div className="text-lg text-white font-bold">{stats.totalMatches}</div>
+                      </div>
+                      <div className="glass-panel rounded-lg p-3 border border-slate-700/60">
+                          <div className="text-slate-500">Wins</div>
+                          <div className="text-lg text-white font-bold">{stats.totalWins}</div>
+                      </div>
+                      <div className="glass-panel rounded-lg p-3 border border-slate-700/60">
+                          <div className="text-slate-500">AI Wins</div>
+                          <div className="text-lg text-white font-bold">{stats.aiWins}</div>
+                      </div>
+                      <div className="glass-panel rounded-lg p-3 border border-slate-700/60">
+                          <div className="text-slate-500">Best Streak</div>
+                          <div className="text-lg text-white font-bold">{stats.bestWinStreak}</div>
+                      </div>
+                  </div>
+
                   <div className="text-xs text-slate-500 pt-8">
                       Powered by Google Gemini 3.0 Flash • React 18 • Tailwind
                   </div>
@@ -496,8 +537,11 @@ export default function App() {
                     <div className="text-sm text-slate-400 font-mono">
                         TURN: <span className="text-white font-bold">{gameState.phase === 'PLAYER1_TURN' ? gameState.players.player1.name : gameState.players.player2.name}</span>
                     </div>
-                    <button onClick={() => initializeGame(gameState.players.player2.isAi)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                    <button onClick={() => initializeGame(gameState.players.player2.isAi)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white" title="Restart match">
                         <RefreshCw size={18} />
+                    </button>
+                    <button onClick={exitToMenu} className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 text-xs hover:bg-slate-800 transition-colors" title="Exit to menu">
+                        Exit
                     </button>
                 </div>
             </header>
@@ -532,12 +576,20 @@ export default function App() {
                             <p className="text-2xl text-cyan-400 mb-8">
                                 {gameState.winner === 'player1' ? gameState.players.player1.name : gameState.players.player2.name} wins!
                             </p>
-                            <button 
-                                onClick={() => initializeGame(gameState.players.player2.isAi)}
-                                className="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold shadow-lg shadow-cyan-500/25 transition-all"
-                            >
-                                Play Again
-                            </button>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => initializeGame(gameState.players.player2.isAi)}
+                                    className="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold shadow-lg shadow-cyan-500/25 transition-all"
+                                >
+                                    Play Again
+                                </button>
+                                <button 
+                                    onClick={exitToMenu}
+                                    className="px-6 py-3 border border-slate-700 text-slate-200 rounded-lg font-bold hover:bg-slate-800 transition-colors"
+                                >
+                                    Exit to Menu
+                                </button>
+                            </div>
                         </div>
                     )}
 
