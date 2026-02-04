@@ -68,8 +68,8 @@ export default function App() {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupModeIsAi, setSetupModeIsAi] = useState(true);
-  const [setupPlayer1Name, setSetupPlayer1Name] = useState('Player 1');
-  const [setupPlayer2Name, setSetupPlayer2Name] = useState('Gemini AI');
+  const [setupPlayer1Name, setSetupPlayer1Name] = useState(localStorage.getItem('neon_duel_last_p1') || 'Player 1');
+  const [setupPlayer2Name, setSetupPlayer2Name] = useState(localStorage.getItem('neon_duel_last_p2_ai') || 'Gemini AI');
   const [setupKeyInput, setSetupKeyInput] = useState('');
   const [tempKey, setTempKey] = useState('');
   const [stats, setStats] = useState(() => {
@@ -142,8 +142,17 @@ export default function App() {
     });
     setLeaderboard((prev) => {
       const next = [...prev];
-      const updateEntry = (name: string, didWin: boolean) => {
+      const resolveName = (name: string, fallbackKey: string) => {
         const trimmed = name.trim();
+        if (!trimmed) return '';
+        const stored = localStorage.getItem(fallbackKey) || '';
+        if ((trimmed === 'Player 1' || trimmed === 'Player 2' || trimmed === 'Gemini AI') && stored.trim()) {
+          return stored.trim();
+        }
+        return trimmed;
+      };
+      const updateEntry = (name: string, didWin: boolean, fallbackKey: string) => {
+        const trimmed = resolveName(name, fallbackKey);
         if (!trimmed) return;
         const existingIndex = next.findIndex((entry) => entry.name.toLowerCase() === trimmed.toLowerCase());
         if (existingIndex >= 0) {
@@ -158,8 +167,9 @@ export default function App() {
           next.push({ name: trimmed, matches: 1, wins: didWin ? 1 : 0, lastPlayed: Date.now() });
         }
       };
-      updateEntry(players.player1.name, winnerId === 'player1');
-      updateEntry(players.player2.name, winnerId === 'player2');
+      updateEntry(players.player1.name, winnerId === 'player1', 'neon_duel_last_p1');
+      const p2Key = players.player2.isAi ? 'neon_duel_last_p2_ai' : 'neon_duel_last_p2_pvp';
+      updateEntry(players.player2.name, winnerId === 'player2', p2Key);
       localStorage.setItem('neon_duel_leaderboard', JSON.stringify(next));
       return next;
     });
@@ -398,8 +408,11 @@ export default function App() {
 
   const handleStartGameClick = (vsAi: boolean) => {
     setSetupModeIsAi(vsAi);
-    setSetupPlayer1Name(gameState.players.player1.name || 'Player 1');
-    setSetupPlayer2Name(vsAi ? 'Gemini AI' : gameState.players.player2.name || 'Player 2');
+    const lastP1 = localStorage.getItem('neon_duel_last_p1') || gameState.players.player1.name || 'Player 1';
+    const lastP2Ai = localStorage.getItem('neon_duel_last_p2_ai') || 'Gemini AI';
+    const lastP2Pvp = localStorage.getItem('neon_duel_last_p2_pvp') || gameState.players.player2.name || 'Player 2';
+    setSetupPlayer1Name(lastP1);
+    setSetupPlayer2Name(vsAi ? lastP2Ai : lastP2Pvp);
     setSetupKeyInput('');
     setShowSetupModal(true);
   };
@@ -417,6 +430,12 @@ export default function App() {
   const handleSetupStart = () => {
     const p1Name = setupPlayer1Name.trim() || 'Player 1';
     const p2Name = setupPlayer2Name.trim() || (setupModeIsAi ? 'Gemini AI' : 'Player 2');
+    localStorage.setItem('neon_duel_last_p1', p1Name);
+    if (setupModeIsAi) {
+      localStorage.setItem('neon_duel_last_p2_ai', p2Name);
+    } else {
+      localStorage.setItem('neon_duel_last_p2_pvp', p2Name);
+    }
     if (setupKeyInput.trim().length > 0) {
       const key = setupKeyInput.trim();
       setApiKey(key);
